@@ -5,6 +5,7 @@ typedef struct No tipoNo;
 struct No{
 	uint32_t prefixo;
 	short int skip;
+	short int eh_prefixo;
 	tipoNo* pai;
 	tipoNo* esq;
 	tipoNo* dir;
@@ -20,6 +21,7 @@ tipoNo* criar_no(uint32_t prefixo){
 	tipoNo* novo = malloc(sizeof(tipoNo));
 	novo->prefixo = prefixo;
 	novo->skip = 1;
+	novo->eh_prefixo = 0;
 	novo->pai = NULL;
 	novo->esq = NULL;
 	novo->dir = NULL;
@@ -44,28 +46,60 @@ short int conta_zeros(uint32_t prefixo){
 	return quant_zeros;
 }
 
-int insere_no(triePatricia* arvore, tipoNo* raiz, uint32_t prefixo){
+tipoNo* insere_no_filhos(triePatricia* arvore, tipoNo* atual, tipoNo* pai, uint32_t prefixo){
 	tipoNo* novo = criar_no(prefixo);
-	if(raiz == NULL){
-		raiz = novo;
+	if(atual == NULL){
+		atual = novo;
+		atual->pai = pai;
+		arvore->tamanho++;
+		return novo;
+	} else if((atual->prefixo ^ prefixo) != 0){
+		atual->skip = conta_zeros(atual->prefixo ^ prefixo);
+		if(( (prefixo & (1 << (atual->skip - 1))) >> (atual->skip - 1) ) == 0){
+			insere_no_filhos(arvore, atual->esq, atual, prefixo);
+		} else{
+			insere_no_filhos(arvore, atual->dir, atual, prefixo);
+		}
+	}
+	return atual;
+}
+
+int insere_no(triePatricia* arvore, uint32_t prefixo){
+	tipoNo* novo = criar_no(prefixo);
+	if(arvore->raiz == NULL){
+		arvore->raiz = novo;
+		arvore->raiz->eh_prefixo = 1;
 		arvore->tamanho++;
 		return 0;
-	} else if((raiz->prefixo ^ prefixo) != 0){
-		raiz->skip = conta_zeros(raiz->prefixo ^ prefixo);
-		if(( (prefixo & (1 << (raiz->skip - 1))) >> (raiz->skip - 1) ) == 0){
-			insere_no(arvore, raiz->esq, prefixo);
-		} else{
-			insere_no(arvore, raiz->dir, prefixo);
+	} else{
+		novo = insere_no_filhos(arvore, arvore->raiz, NULL, prefixo);
+		if(novo){
+			arvore->raiz = novo;
+			return 0;
 		}
 	}
 	return 1;
+}
+
+tipoNo* busca_prefixo_mais_longo(triePatricia* arvore, uint32_t prefixo){
+	tipoNo* atual = arvore->raiz;
+	tipoNo* match = NULL;
+
+	while(atual != NULL){
+		if((atual->eh_prefixo == 1) && ((atual->prefixo ^ prefixo) == 0)){
+			match = atual;
+		}
+		if(( (prefixo & (1 << (atual->skip-1))) >> (atual->skip-1) ) == 0){
+			atual = atual->esq;
+		} else{
+			atual = atual->dir;
+		}
+	}
+	return match;
 }
 
 void deleta_no(triePatricia* arvore, uint32_t prefixo){
 }
 
 void comprime_caminho(triePatricia* arvore){
-}
-
-tipoNo* busca_prefixo_mais_longo(triePatricia* arvore){
 }
