@@ -20,8 +20,8 @@ struct patricia{
 tipoNo* criar_no(uint32_t prefixo){
 	tipoNo* novo = malloc(sizeof(tipoNo));
 	novo->prefixo = prefixo;
-	novo->skip = 1;
-	novo->eh_prefixo = 0;
+	novo->skip = 0;
+	novo->eh_prefixo = 1;
 	novo->pai = NULL;
 	novo->esq = NULL;
 	novo->dir = NULL;
@@ -39,11 +39,15 @@ short int conta_zeros(uint32_t prefixo){
 	short int quant_zeros = 0;
 	if (prefixo == 0) return 1;
 	if (prefixo & 0xffff0000) prefixo &= 0xffff0000; else quant_zeros += 16;
-    if (prefixo & 0xff00ff00) prefixo &= 0xff00ff00; else quant_zeros += 8;
-    if (prefixo & 0xf0f0f0f0) prefixo &= 0xf0f0f0f0; else quant_zeros += 4;
-    if (prefixo & 0xcccccccc) prefixo &= 0xcccccccc; else quant_zeros += 2;
-    if (prefixo & 0xaaaaaaaa) prefixo &= 0xaaaaaaaa; else quant_zeros += 1;
+	if (prefixo & 0xff00ff00) prefixo &= 0xff00ff00; else quant_zeros += 8;
+	if (prefixo & 0xf0f0f0f0) prefixo &= 0xf0f0f0f0; else quant_zeros += 4;
+	if (prefixo & 0xcccccccc) prefixo &= 0xcccccccc; else quant_zeros += 2;
+	if (prefixo & 0xaaaaaaaa) prefixo &= 0xaaaaaaaa; else quant_zeros += 1;
 	return quant_zeros;
+}
+
+char pega_bit_n(uint32_t prefixo, short int bitN){
+	
 }
 
 tipoNo* insere_no_filhos(triePatricia* arvore, tipoNo* atual, tipoNo* pai, uint32_t prefixo){
@@ -55,7 +59,7 @@ tipoNo* insere_no_filhos(triePatricia* arvore, tipoNo* atual, tipoNo* pai, uint3
 		return novo;
 	} else if((atual->prefixo ^ prefixo) != 0){
 		atual->skip = conta_zeros(atual->prefixo ^ prefixo);
-		if(( (prefixo & (1 << (atual->skip - 1))) >> (atual->skip - 1) ) == 0){
+		if(pega_bit_n(prefixo, atual->skip) == 0){
 			insere_no_filhos(arvore, atual->esq, atual, prefixo);
 		} else{
 			insere_no_filhos(arvore, atual->dir, atual, prefixo);
@@ -89,7 +93,7 @@ tipoNo* busca_prefixo_mais_longo(triePatricia* arvore, uint32_t prefixo){
 		if((atual->eh_prefixo == 1) && ((atual->prefixo ^ prefixo) == 0)){
 			match = atual;
 		}
-		if(( (prefixo & (1 << (atual->skip-1))) >> (atual->skip-1) ) == 0){
+		if(pega_bit_n(prefixo, atual->skip) == 0){
 			atual = atual->esq;
 		} else{
 			atual = atual->dir;
@@ -98,8 +102,17 @@ tipoNo* busca_prefixo_mais_longo(triePatricia* arvore, uint32_t prefixo){
 	return match;
 }
 
-void deleta_no(triePatricia* arvore, uint32_t prefixo){
+void remove_no(triePatricia* arvore, uint32_t prefixo){
+	tipoNo* atual = arvore->raiz;
+	if(atual != NULL){
+		while((atual->prefixo ^ prefixo) != 0){
+			if(pega_bit_n(prefixo, atual->skip) == 0){
+				atual = atual->esq;
+			} else{
+				atual = atual->dir;
+			}
+		}
+		free(atual);
+	}
 }
 
-void comprime_caminho(triePatricia* arvore){
-}
