@@ -1,13 +1,19 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#define MAX_BITS 128 //IPv6
+#define MAX_BITS 32 //IPv4
+#define tipoBits uint32_t
+
+typedef struct{
+	tipoBits bits;
+	short int tamanho;
+}prefixo;
 
 typedef struct No tipoNo;
 struct No{
-	uint32_t prefixo;
+	prefixo* ip;
 	short int skip;
-	short int eh_prefixo;
+	char eh_prefixo;
 	tipoNo* pai;
 	tipoNo* esq;
 	tipoNo* dir;
@@ -19,9 +25,9 @@ struct patricia{
 	int tamanho;
 };
 
-tipoNo* criar_no(uint32_t prefixo){
+tipoNo* criar_no(prefixo* ip){
 	tipoNo* novo = malloc(sizeof(tipoNo));
-	novo->prefixo = prefixo;
+	novo->ip = ip;
 	novo->skip = MAX_BITS;
 	novo->eh_prefixo = 1;
 	novo->pai = NULL;
@@ -37,27 +43,59 @@ triePatricia* cria_arvore(){
 	return arvore;
 }
 
-short int conta_zeros(uint32_t prefixo){
-	short int quant_zeros = 0;
-	if (prefixo == 0) return 1;
-	if (prefixo & 0xffff0000) prefixo &= 0xffff0000; else quant_zeros += 16;
-	if (prefixo & 0xff00ff00) prefixo &= 0xff00ff00; else quant_zeros += 8;
-	if (prefixo & 0xf0f0f0f0) prefixo &= 0xf0f0f0f0; else quant_zeros += 4;
-	if (prefixo & 0xcccccccc) prefixo &= 0xcccccccc; else quant_zeros += 2;
-	if (prefixo & 0xaaaaaaaa) prefixo &= 0xaaaaaaaa; else quant_zeros += 1;
+char conta_zeros(tipoBits bits){
+	char quant_zeros = 0;
+	if (bits == 0) return 32;
+	if (bits & 0xffff0000) bits &= 0xffff0000; else quant_zeros += 16;
+	if (bits & 0xff00ff00) bits &= 0xff00ff00; else quant_zeros += 8;
+	if (bits & 0xf0f0f0f0) bits &= 0xf0f0f0f0; else quant_zeros += 4;
+	if (bits & 0xcccccccc) bits &= 0xcccccccc; else quant_zeros += 2;
+	if (bits & 0xaaaaaaaa) bits &= 0xaaaaaaaa; else quant_zeros += 1;
 	return quant_zeros;
 }
 
-char compara_bits(uint32_t prefixo1, uint32_t prefixo2){
 
+tipoBits compara_bits(prefixo* bitsNovo, prefixo* bitsFilho){
+	short int i;
+	short int tam1 = bitsNovo->tamanho;
+	short int tam2 = bitsFilho->tamanho;
+	tipoBits bits = bitsNovo->bits;
+
+	if(tam1 < tam2){
+		for(i = 0; i < (tam2 - tam1); i++){
+			bits <<= 1;
+		}
+	} else if(tam1 > tam2){
+		for(i = 0; i < (tam1 - tam2); i++){
+			bits >>= 1;
+		}
+	}
+	return bits ^ bitsFilho->bits;
 }
 
-char compara_n_bits(uint32_t prefixo, short int bitN){
-	
+char compara_n_bits(prefixo* bitsNovo, prefixo* bitsFilho, short int nInicio, short int nFim){
+	short int i;
+	tipoBits bits1 = bitsNovo->bits;
+	tipoBits bits2 = bitsFilho->bits;
+	char bit1, bit2;
+
+	for(i = 0; i < nInicio; i++){
+		bits1 <<= 1;
+		bits2 <<= 1;
+	}
+	for(i = 0; i < (nFim - nInicio); i++){
+		bit1 = (bits1 >> (MAX_BITS-1)) & 1;
+		bit2 = (bits2 >> (MAX_BITS-1)) & 1;
+		if(bit1 != bit2) return bit1;
+		bits1 <<= 1;
+		bits2 <<= 1;
+	}
+
+	return MAX_BITS;
 }
 
-int insere_no(triePatricia* arvore, uint32_t prefixo){
-	tipoNo* novo = criar_no(prefixo);
+int insere_no(triePatricia* arvore, prefixo* bits){
+	tipoNo* novo = criar_no(bits);
 	tipoNo* atual = arvore->raiz;
 
 	if(atual == NULL){
@@ -65,56 +103,115 @@ int insere_no(triePatricia* arvore, uint32_t prefixo){
 		arvore->tamanho++;
 		return 0;
 	}
-
-	tipoNo* novo_pai = NULL;
+	int onde = 0;
+	short int tam = bits->tamanho;
+	tipoNo* pai = atual->pai;
 	while(atual->skip < MAX_BITS){
-		if((atual->eh_prefixo == 1) && ((atual->prefixo ^ prefixo) == 0)){
+		if((atual->eh_prefixo == 1) && (tam == atual->ip->tamanho) && (compara_bits(novo->ip, atual->ip) == 0)){
 			free(novo);
 			return 1; //pois ja esta na arvore
 		}
-		if(compara_n_bits(prefixo, atual->skip) == 0){
-			atual = atual->esq;
+		if(pai != NULL){
+			if(compara_n_bits(novo->ip, atual->ip, pai->skip, atual->skip) == 0){
+				atual = atual->esq;
+				onde = 0;
+			} else{
+				atual = atual->dir;
+				onde = 1;
+			}
 		} else{
-			atual = atual->dir;
+			if(compara_n_bits(novo->ip, atual->ip, 0, atual->skip) == 0){
+				atual = atual->esq;
+				onde = 0;
+			} else{
+				atual = atual->dir;
+				onde = 1;
+			}
 		}
+		pai = atual->pai;
 	}
-	novo_pai->skip = conta_zeros(atual->prefixo ^ prefixo);
+	tipoNo* novo_pai = criar_no(NULL);
+	novo_pai->skip = conta_zeros(compara_bits(novo->ip, atual->ip));
+	novo_pai->eh_prefixo = 0;
+	if(onde == 0){
+		novo_pai->esq = novo;
+		novo_pai->dir = pai;
+	}else if(onde == 1){
+		novo_pai->esq = pai;
+		novo_pai->dir = novo;
+	}
+	pai->pai = novo_pai;
+	novo->pai = novo_pai;
 	
-	return 1;
+	return 0;
 }
 
-tipoNo* busca_prefixo_mais_longo(triePatricia* arvore, uint32_t prefixo){
+prefixo* busca_prefixo_mais_longo(triePatricia* arvore, prefixo* bits){
 	tipoNo* atual = arvore->raiz;
-	tipoNo* match = NULL;
+	if(atual == NULL) return NULL;
 
+	prefixo* match = NULL;
+	tipoNo* pai = atual->pai;
 	while(atual->skip < MAX_BITS){
-		char result = compara_bits(atual->prefixo, prefixo);
-		if((atual->eh_prefixo == 1) && (result == 0)){
-			match = atual;
+		if((atual->eh_prefixo == 1) && (compara_bits(bits, atual->ip) == 0)){
+			match = atual->ip;
+		} else if((atual->eh_prefixo == 1) && (compara_bits(bits, atual->ip) != 0)){
+			return match; //pois o match anterior (ou nenhum) e o prefixo mais longo concordante
 		}
-		else if((atual->eh_prefixo == 1) && (result != 0)){
-			return match; //pois o match anterior e o prefixo mais longo concordante
-		}
-		if(compara_n_bits(prefixo, atual->skip) == 0){
-			atual = atual->esq;
+		if(pai != NULL){
+			if(compara_n_bits(bits, atual->ip, pai->skip, atual->skip) == 0){
+				atual = atual->esq;
+			} else{
+				atual = atual->dir;
+			}
 		} else{
-			atual = atual->dir;
-		}
-	}
-	return match;
-}
-
-void remove_no(triePatricia* arvore, uint32_t prefixo){
-	tipoNo* atual = arvore->raiz;
-	if(atual->skip < MAX_BITS){
-		while(compara_bits(atual->prefixo, prefixo) != 0){
-			if(compara_n_bits(prefixo, atual->skip) == 0){
+			if(compara_n_bits(bits, atual->ip, 0, atual->skip) == 0){
 				atual = atual->esq;
 			} else{
 				atual = atual->dir;
 			}
 		}
-		free(atual);
+		pai = atual->pai;
 	}
+	return match;
+}
+
+prefixo* remove_no(triePatricia* arvore, prefixo* bits){
+	tipoNo* atual = arvore->raiz;
+	if(atual == NULL) return NULL;
+	
+	int onde = 0;
+	short int tam = bits->tamanho;
+	tipoNo* pai = atual->pai;
+	while(atual->skip < MAX_BITS){
+		if((atual->eh_prefixo == 1) && (tam == atual->ip->tamanho) && (compara_bits(bits, atual->ip) == 0)){
+			if(pai != NULL){
+				if(onde == 0) pai->dir->pai = pai->pai;
+				else if(onde == 1) pai->esq->pai = pai->pai;
+				free(pai);
+			}
+			free(atual);
+			return bits;
+		}
+		if(pai != NULL){
+			if(compara_n_bits(bits, atual->ip, pai->skip, atual->skip) == 0){
+				atual = atual->esq;
+				onde = 0;
+			} else{
+				atual = atual->dir;
+				onde = 1;
+			}
+		} else{
+			if(compara_n_bits(bits, atual->ip, 0, atual->skip) == 0){
+				atual = atual->esq;
+				onde = 0;
+			} else{
+				atual = atual->dir;
+				onde = 1;
+			}
+		}
+		pai = atual->pai;
+	}
+	return NULL;
 }
 
