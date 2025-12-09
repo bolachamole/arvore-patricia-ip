@@ -1,13 +1,4 @@
-#include <stdlib.h>
-#include <stdint.h>
-
-#define MAX_BITS 32 //IPv4
-#define tipoBits uint32_t
-
-typedef struct{
-	tipoBits bits;
-	short int tamanho;
-}prefixo;
+#include "patricia.h"
 
 typedef struct No tipoNo;
 struct No{
@@ -18,7 +9,6 @@ struct No{
 	tipoNo* dir;
 };
 
-typedef struct patricia triePatricia;
 struct patricia{
 	tipoNo* raiz;
 	int tamanho;
