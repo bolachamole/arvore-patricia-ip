@@ -13,7 +13,6 @@ typedef struct No tipoNo;
 struct No{
 	prefixo* ip;
 	short int skip;
-	char eh_prefixo;
 	tipoNo* pai;
 	tipoNo* esq;
 	tipoNo* dir;
@@ -29,7 +28,6 @@ tipoNo* criar_no(prefixo* ip){
 	tipoNo* novo = malloc(sizeof(tipoNo));
 	novo->ip = ip;
 	novo->skip = MAX_BITS;
-	novo->eh_prefixo = 1;
 	novo->pai = NULL;
 	novo->esq = NULL;
 	novo->dir = NULL;
@@ -45,7 +43,7 @@ triePatricia* cria_arvore(){
 
 char conta_zeros(tipoBits bits){
 	char quant_zeros = 0;
-	if (bits == 0) return 32;
+	if (bits == 0) return MAX_BITS;
 	if (bits & 0xffff0000) bits &= 0xffff0000; else quant_zeros += 16;
 	if (bits & 0xff00ff00) bits &= 0xff00ff00; else quant_zeros += 8;
 	if (bits & 0xf0f0f0f0) bits &= 0xf0f0f0f0; else quant_zeros += 4;
@@ -107,10 +105,6 @@ int insere_no(triePatricia* arvore, prefixo* bits){
 	short int tam = bits->tamanho;
 	tipoNo* pai = atual->pai;
 	while(atual->skip < MAX_BITS){
-		if((atual->eh_prefixo == 1) && (tam == atual->ip->tamanho) && (compara_bits(novo->ip, atual->ip) == 0)){
-			free(novo);
-			return 1; //pois ja esta na arvore
-		}
 		if(pai != NULL){
 			if(compara_n_bits(novo->ip, atual->ip, pai->skip, atual->skip) == 0){
 				atual = atual->esq;
@@ -130,9 +124,12 @@ int insere_no(triePatricia* arvore, prefixo* bits){
 		}
 		pai = atual->pai;
 	}
+	if((tam == atual->ip->tamanho) && (compara_bits(novo->ip, atual->ip) == 0)){
+		free(novo);
+		return 1; //pois ja esta na arvore
+	}
 	tipoNo* novo_pai = criar_no(NULL);
 	novo_pai->skip = conta_zeros(compara_bits(novo->ip, atual->ip));
-	novo_pai->eh_prefixo = 0;
 	if(onde == 0){
 		novo_pai->esq = novo;
 		novo_pai->dir = pai;
@@ -153,11 +150,6 @@ prefixo* busca_prefixo_mais_longo(triePatricia* arvore, prefixo* bits){
 	prefixo* match = NULL;
 	tipoNo* pai = atual->pai;
 	while(atual->skip < MAX_BITS){
-		if((atual->eh_prefixo == 1) && (compara_bits(bits, atual->ip) == 0)){
-			match = atual->ip;
-		} else if((atual->eh_prefixo == 1) && (compara_bits(bits, atual->ip) != 0)){
-			return match; //pois o match anterior (ou nenhum) e o prefixo mais longo concordante
-		}
 		if(pai != NULL){
 			if(compara_n_bits(bits, atual->ip, pai->skip, atual->skip) == 0){
 				atual = atual->esq;
@@ -173,6 +165,9 @@ prefixo* busca_prefixo_mais_longo(triePatricia* arvore, prefixo* bits){
 		}
 		pai = atual->pai;
 	}
+	if(compara_bits(bits, atual->ip) == 0){
+		match = atual->ip;
+	}
 	return match;
 }
 
@@ -183,16 +178,7 @@ prefixo* remove_no(triePatricia* arvore, prefixo* bits){
 	int onde = 0;
 	short int tam = bits->tamanho;
 	tipoNo* pai = atual->pai;
-	while(atual->skip < MAX_BITS){
-		if((atual->eh_prefixo == 1) && (tam == atual->ip->tamanho) && (compara_bits(bits, atual->ip) == 0)){
-			if(pai != NULL){
-				if(onde == 0) pai->dir->pai = pai->pai;
-				else if(onde == 1) pai->esq->pai = pai->pai;
-				free(pai);
-			}
-			free(atual);
-			return bits;
-		}
+	while(atual->skip < MAX_BITS){	
 		if(pai != NULL){
 			if(compara_n_bits(bits, atual->ip, pai->skip, atual->skip) == 0){
 				atual = atual->esq;
@@ -211,6 +197,15 @@ prefixo* remove_no(triePatricia* arvore, prefixo* bits){
 			}
 		}
 		pai = atual->pai;
+	}
+	if((tam == atual->ip->tamanho) && (compara_bits(bits, atual->ip) == 0)){
+		if(pai != NULL){
+			if(onde == 0) pai->dir->pai = pai->pai;
+			else if(onde == 1) pai->esq->pai = pai->pai;
+			free(pai);
+		}
+		free(atual);
+		return bits;
 	}
 	return NULL;
 }
